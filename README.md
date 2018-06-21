@@ -1,7 +1,9 @@
 # AWS Free Tier Wordpress Installation
 
-Single Template Wordpress Installation using AWS CloudFormation. This should be entirely within the free tier. This was cloned, converted to YAML, and modified from a template that AWS provides here:
+Single Template Wordpress Installation using AWS CloudFormation. This should be entirely within the free tier. This was cloned, converted to YAML, and significantly modified from a template that AWS provides here:
 https://s3-eu-west-1.amazonaws.com/cloudformation-templates-eu-west-1/WordPress_Multi_AZ.template
+
+This template assumes that you have no networking resources created, and will create a VPC, public/private subnets, and route tables for you.
 
 ### Prerequisites
 
@@ -12,6 +14,7 @@ https://s3-eu-west-1.amazonaws.com/cloudformation-templates-eu-west-1/WordPress_
 ```
 EC2 KeyPair Name
 Your Current IP address (Google Search for What's My IP)
+The latest Amazon Linux AMI ID
 ```
 
 ## Deployment
