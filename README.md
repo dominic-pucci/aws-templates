@@ -23,3 +23,7 @@ This template assumes that you have no networking resources created, and will cr
 4. Click Next until you reach the final step, and then click Create
 5. Once the stack status reads CREATE_COMPLETE, select your stack and navigate to the Outputs tab, where a link to your WordPress site will be available.
 6. Navigate to that link and complete the WordPress browser installation
+
+Final Result:
+![alt text](https://raw.githubusercontent.com/dominic-pucci/aws-templates/master/wpinstall.png)
+
