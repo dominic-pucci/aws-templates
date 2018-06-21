@@ -1,4 +1,4 @@
-# Project Title
+# AWS Free Tier Wordpress Installation
 
 Single Template Wordpress Installation using AWS CloudFormation. This should be entirely within the free tier. This was cloned, converted to YAML, and modified from a template that AWS provides here:
 https://s3-eu-west-1.amazonaws.com/cloudformation-templates-eu-west-1/WordPress_Multi_AZ.template
