@@ -1,0 +1,343 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation Template for Single Instance Wordpress with RDS (compatible with free tier)'
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+  MyLocation:
+    Description: The IP address from which you'd like to allow access to your WP installation
+    Type: String
+    MinLength: '7'
+    MaxLength: '16'
+    Default: '0.0.0.0'
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})
+    ConstraintDescription: must be a valid IP  of the form x.x.x.x.
+  AmznAmi:
+    Description: The ID of the latest Amazon Linux AMI (MUST be Amazon Linux)
+    Type: String
+    AllowedPattern: ami-.{1,}
+    ConstraintDescription: Must be an Amazon Linux AMI in the format of ami-XXX...
+  DBName:
+    Default: wordpressdb
+    Description: The WordPress database name
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBUser:
+    NoEcho: 'true'
+    Description: The WordPress database admin account username
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+  DBPassword:
+    NoEcho: 'true'
+    Description: The WordPress database admin account password
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+Resources:
+  Vpc:
+    Type: "AWS::EC2::VPC"
+    Properties: 
+      CidrBlock: "10.168.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+      Tags:
+        -
+          Key: "Name"
+          Value: "Wordpress Vpc"
+
+  Igw:
+    Type: "AWS::EC2::InternetGateway"
+    Properties: 
+      Tags:
+        -
+          Key: "Name"
+          Value: "Wordpress Igw"
+
+  IgwAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties: 
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref Igw
+      
+  PubSub:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: "10.168.0.0/24"
+      MapPublicIpOnLaunch: true
+      Tags:
+        -
+          Key: "Name"
+          Value: "WpPubSub"
+        -
+          Key: "Environment"
+          Value: "PROD"
+      VpcId: !Ref Vpc
+  
+  PriSub1:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: us-east-1a
+      CidrBlock: "10.168.1.0/24"
+      MapPublicIpOnLaunch: false
+      Tags:
+        -
+          Key: "Name"
+          Value: "WpPriSub1"
+        -
+          Key: "Environment"
+          Value: "PROD"
+      VpcId: !Ref Vpc
+      
+  PriSub2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: us-east-1b
+      CidrBlock: "10.168.2.0/24"
+      MapPublicIpOnLaunch: false
+      Tags:
+        -
+          Key: "Name"
+          Value: "WpPriSub2"
+        -
+          Key: "Environment"
+          Value: "PROD"
+      VpcId: !Ref Vpc
+      
+  PubRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref Vpc
+      Tags:
+        -
+          Key: "Name"
+          Value: "PubRouteTable"
+
+  PubSubRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      RouteTableId: !Ref PubRouteTable
+      SubnetId: !Ref PubSub
+      
+  PriRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties: 
+      VpcId: !Ref Vpc
+      Tags:
+        -
+          Key: "Name"
+          Value: "PriRouteTable"
+
+  PriSubRouteTableAssociation1:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      RouteTableId: !Ref PriRouteTable
+      SubnetId: !Ref PriSub1
+
+  PriSubRouteTableAssociation2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties: 
+      RouteTableId: !Ref PriRouteTable
+      SubnetId: !Ref PriSub2
+      
+  PubRouteToInternet:
+    Type: "AWS::EC2::Route"
+    Properties: 
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref Igw
+      RouteTableId: !Ref PubRouteTable
+  
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP + SSH access (port 80/22) locked down to your IP address
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: !Sub '${MyLocation}/32'
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Sub '${MyLocation}/32'
+      VpcId: !Ref 'Vpc'
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          wordpress_install:
+            - install_cfn
+            - install_wordpress
+        install_cfn:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Join
+                - ''
+                - - "[main]\n"
+                  - stack=
+                  - !Ref 'AWS::StackId'
+                  - "\n"
+                  - region=
+                  - !Ref 'AWS::Region'
+                  - "\n"
+              mode: '000400'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Join
+                - ''
+                - - "[cfn-auto-reloader-hook]\n"
+                  - "triggers=post.update\n"
+                  - "path=Resources.LaunchConfig.Metadata.AWS::CloudFormation::Init\n"
+                  - 'action=/opt/aws/bin/cfn-init -v '
+                  - '         --stack '
+                  - !Ref 'AWS::StackName'
+                  - '         --resource Ec2Instance '
+                  - '         --configsets wordpress_install '
+                  - '         --region '
+                  - !Ref 'AWS::Region'
+                  - "\n"
+              mode: '000400'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: 'true'
+                ensureRunning: 'true'
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        install_wordpress:
+          packages:
+            yum:
+              php: []
+              php-mysql: []
+              mysql: []
+              httpd: []
+          sources:
+            /var/www/html: http://wordpress.org/latest.tar.gz
+          files:
+            /tmp/create-wp-config:
+              content: !Join
+                - ''
+                - - "#!/bin/bash\n"
+                  - "cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php\n"
+                  - sed -i "s/'database_name_here'/'
+                  - !Ref 'DBName'
+                  - "'/g\" wp-config.php\n"
+                  - sed -i "s/'username_here'/'
+                  - !Ref 'DBUser'
+                  - "'/g\" wp-config.php\n"
+                  - sed -i "s/'password_here'/'
+                  - !Ref 'DBPassword'
+                  - "'/g\" wp-config.php\n"
+                  - sed -i "s/'localhost'/'
+                  - !GetAtt 'DBInstance.Endpoint.Address'
+                  - "'/g\" wp-config.php\n"
+              mode: '000500'
+              owner: root
+              group: root
+          commands:
+            '01_configure_wordpress':
+              command: /tmp/create-wp-config
+              cwd: /var/www/html/wordpress
+          services:
+            sysvinit:
+              httpd:
+                enabled: 'true'
+                ensureRunning: 'true'
+    Properties:
+      ImageId: !Ref AmznAmi
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !GetAtt 'WebServerSecurityGroup.GroupId'
+      KeyName: !Ref 'KeyName'
+      SubnetId: !Ref PubSub
+      UserData: !Base64
+        Fn::Join:
+          - ''
+          - - "#!/bin/bash -xe\n"
+            - "yum update -y aws-cfn-bootstrap\n"
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource Ec2Instance '
+            - '         --configsets wordpress_install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - "\n"
+            - '/opt/aws/bin/cfn-signal -e $? '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource WebServerGroup '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - "\n"
+      Tags:
+        -
+          Key: "Name"
+          Value: "WpInstance"
+
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !Ref 'WebServerSecurityGroup'
+      VpcId: !Ref 'Vpc'
+
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: "Wp DB Subnet Group"
+      DBSubnetGroupName: "wp-db-sgrp"
+      SubnetIds:
+        - !Ref PriSub1
+        - !Ref PriSub2
+      Tags:
+        -
+          Key: "Name"
+          Value: "WpSubnetGroup"
+  
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      BackupRetentionPeriod: 0
+      DBName: !Ref 'DBName'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      Engine: MySQL
+      MultiAZ: false
+      MasterUsername: !Ref 'DBUser'
+      MasterUserPassword: !Ref 'DBPassword'
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 10
+      VPCSecurityGroups:
+        - !GetAtt 'DBEC2SecurityGroup.GroupId'
+
+Outputs:
+  WebsiteURL:
+    Value: !Join
+      - ''
+      - - http://
+        - !GetAtt 'Ec2Instance.PublicDnsName'
+        - /wordpress
+    Description: WordPress Website
