@@ -8,11 +8,11 @@ This template assumes that you have no networking resources created, and will cr
 ### Prerequisites
 
 1. An AWS Account
-2. (Optional) An S3 bucket to store this template in. Otherwise you can just upload the template via the CloudFormation console.
-3. The following parameters (easier to gather beforehand):
-    1. EC2 KeyPair Name
-    2. Your Current IP address
-    3. The latest Amazon Linux AMI ID
+2. An existing EC2 KeyPair (you'll be able to select it when creating the stack)
+3. (Optional) An S3 bucket to store this template in. Otherwise you can just upload the template via the CloudFormation console.
+4. The following parameters (easier to gather beforehand):
+    1. Your Current IP address
+    2. The latest Amazon Linux AMI ID
 
 
 ## Deployment
