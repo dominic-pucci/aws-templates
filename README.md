@@ -10,12 +10,10 @@ This template assumes that you have no networking resources created, and will cr
 1. An AWS Account
 2. (Optional) An S3 bucket to store this template in. Otherwise you can just upload the template via the CloudFormation console.
 3. The following parameters (easier to gather beforehand):
+    1. EC2 KeyPair Name
+    2. Your Current IP address
+    3. The latest Amazon Linux AMI ID
 
-```
-EC2 KeyPair Name
-Your Current IP address (Google Search for What's My IP)
-The latest Amazon Linux AMI ID
-```
 
 ## Deployment
 
